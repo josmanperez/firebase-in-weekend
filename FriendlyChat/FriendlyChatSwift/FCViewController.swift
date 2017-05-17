@@ -296,35 +296,6 @@ extension FCViewController: UITableViewDelegate, UITableViewDataSource {
         return UITableViewAutomaticDimension
     }
     
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        // TODO: if message contains an image, then display the image
-    }
-    
-    // MARK: Show Image Display
-    
-    func showImageDisplay(_ image: UIImage) {
-        dismissImageRecognizer.isEnabled = true
-        dismissKeyboardRecognizer.isEnabled = false
-        messageTextField.isEnabled = false
-        UIView.animate(withDuration: 0.25) {
-            self.backgroundBlur.effect = UIBlurEffect(style: .light)
-            self.imageDisplay.alpha = 1.0
-            self.imageDisplay.image = image
-        }
-    }
-    
-    // MARK: Show Image Display
-    
-    func showImageDisplay(image: UIImage) {
-        dismissImageRecognizer.isEnabled = true
-        dismissKeyboardRecognizer.isEnabled = false
-        messageTextField.isEnabled = false
-        UIView.animate(withDuration: 0.25) {
-            self.backgroundBlur.effect = UIBlurEffect(style: .light)
-            self.imageDisplay.alpha = 1.0
-            self.imageDisplay.image = image
-        }
-    }
 }
 
 // MARK: - FCViewController: UIImagePickerControllerDelegate
@@ -343,6 +314,47 @@ extension FCViewController: UIImagePickerControllerDelegate {
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true, completion: nil)
     }
+    
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        // skip if the keyboard is shown
+        guard !messageTextField.isFirstResponder else { return }
+        
+        // unpack message from firebase data snapshot
+        let messageSnapshot: FIRDataSnapshot! = messages[(indexPath as NSIndexPath).row]
+        let message = messageSnapshot.value as! [String:String]
+        
+        // if tapped row with image message, then display image
+        if let imageUrl = message[Constants.MessageFields.imageUrl] {
+            if let cachedImage = imageCache.object(forKey: imageUrl as NSString) {
+                showImageDisplay(image: cachedImage)
+            } else {
+                FIRStorage.storage().reference(forURL: imageUrl).data(withMaxSize: INT64_MAX) {
+                    (data, error) in
+                    guard error == nil else {
+                        print("Error downloading: \(error)")
+                        return
+                    }
+                    self.showImageDisplay(image: UIImage.init(data: data!)!)
+                }
+            }
+        }
+        
+        
+    }
+    
+    // MARK: Show Image Display
+    
+    func showImageDisplay(image: UIImage) {
+        dismissImageRecognizer.isEnabled = true
+        dismissKeyboardRecognizer.isEnabled = false
+        messageTextField.isEnabled = false
+        UIView.animate(withDuration: 0.25) {
+            self.backgroundBlur.effect = UIBlurEffect(style: .light)
+            self.imageDisplay.alpha = 1.0
+            self.imageDisplay.image = image
+        }
+    }
+    
 }
 
 // MARK: - FCViewController: UITextFieldDelegate
