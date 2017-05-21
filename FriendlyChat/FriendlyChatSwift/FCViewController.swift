@@ -25,6 +25,8 @@ class FCViewController: UIViewController, UINavigationControllerDelegate {
     
     // MARK: Properties
     
+    @IBOutlet weak var menuButton: UIBarButtonItem!
+    
     var ref: FIRDatabaseReference!
     var messages: [FIRDataSnapshot]! = []
     var msglength: NSNumber = 1000
@@ -55,12 +57,29 @@ class FCViewController: UIViewController, UINavigationControllerDelegate {
     
     override func viewDidLoad() {
         configureAuth()
+        configureDrawerMenu()
     }
+    
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         unsubscribeFromAllNotifications()
     }
+    
+    // MARK: Menu action button
+    
+    @IBAction func menuToggle(_ sender: UIBarButtonItem) {
+    }
+    
+    func configureDrawerMenu() -> Void {
+        if self.revealViewController() != nil {
+            menuButton.target = self.revealViewController()
+            menuButton.action = #selector(SWRevealViewController.revealToggle(_:))
+            self.view.addGestureRecognizer(self.revealViewController().panGestureRecognizer())
+            self.revealViewController().rearViewRevealWidth = 200
+        }
+    }
+    
     
     // MARK: Config
     
@@ -118,11 +137,33 @@ class FCViewController: UIViewController, UINavigationControllerDelegate {
     // MARK: Remote Config
     
     func configureRemoteConfig() {
-        // TODO: configure remote configuration settings
+        let remoteConfigSettings = FIRRemoteConfigSettings(developerModeEnabled: true)
+        remoteConfig = FIRRemoteConfig.remoteConfig()
+        remoteConfig.configSettings = remoteConfigSettings!
     }
     
     func fetchConfig() {
-        // TODO: update to the current coniguratation
+        var expirationDuration: Double = 3600
+        // if developer mode , set expirationDuration to 0
+        if remoteConfig.configSettings.isDeveloperModeEnabled {
+            expirationDuration = 0
+        }
+        // fetch Config
+        remoteConfig.fetch(withExpirationDuration: expirationDuration) {
+            (status, error) in
+            if status == .success {
+                print("config fetched!")
+                self.remoteConfig.activateFetched()
+                let friendlyMsgLength = self.remoteConfig["friendly_msg_value"]
+                if friendlyMsgLength.source != .static {
+                    self.msglength = friendlyMsgLength.numberValue!
+                    print("Friend msg length config: \(self.msglength)")
+                }
+            } else {
+                print("config not fetched")
+                print("error: \(error!.localizedDescription)")
+            }
+        }
     }
     
     // MARK: Sign In and Out
@@ -146,6 +187,8 @@ class FCViewController: UIViewController, UINavigationControllerDelegate {
             // TODO: Set up app to send and receive messages when signed in
             configureDatabase()
             configureStorage()
+            configureRemoteConfig()
+            fetchConfig()
         }
     }
     
@@ -271,7 +314,7 @@ extension FCViewController: UITableViewDelegate, UITableViewDataSource {
             FIRStorage.storage().reference(forURL: imageURL).data(withMaxSize: INT64_MAX) {
                 (data, error) in
                 guard error == nil else {
-                    print("error downloading: \(error)")
+                    print("error downloading: \(error?.localizedDescription)")
                     return
                 }
                 // display image
